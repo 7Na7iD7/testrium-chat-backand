@@ -1,0 +1,48 @@
+version: "3.8"
+
+services:
+  chat-db:
+    image: postgres:16
+    container_name: testrium-chat-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${CHAT_DB_PASSWORD}
+      POSTGRES_DB: testrium_chat
+    volumes:
+      - chat_db_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  chat-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: testrium-chat-server
+    restart: unless-stopped
+    depends_on:
+      chat-db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      CHAT_DATABASE_URL: postgres://postgres:${CHAT_DB_PASSWORD}@chat-db:5432/testrium_chat
+    ports:
+      - "127.0.0.1:9090:9090"
+
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: testrium-livekit
+    restart: unless-stopped
+    command: --config /etc/livekit.yaml
+    network_mode: host
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
+
+volumes:
+  chat_db_data:

@@ -1,0 +1,34 @@
+port: 7880
+
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 60000
+  use_external_ip: true
+
+keys:
+  REPLACE_WITH_API_KEY: REPLACE_WITH_API_SECRET
+
+# این دو مقدار باید دقیقاً همان LIVEKIT_API_KEY و LIVEKIT_API_SECRET
+# باشند که در .env سرور chat-server ست می‌شوند — امضای توکن‌هایی که
+# chat-server صادر می‌کند فقط با همین کلید در اینجا معتبر شناخته
+# می‌شود. API_SECRET باید حداقل ۳۲ کاراکتر باشد، مثلاً با:
+#   openssl rand -base64 32
+
+# ------------------------------------------------------------------
+# TURN — فقط در صورت نیاز فعال شود
+# ------------------------------------------------------------------
+# اگر بعد از باز کردن بازه‌ی پورت UDP (۵۰۰۰۰-۶۰۰۰۰) در فایروال
+# دانشگاه، دانشجویانی که پشت شبکه‌های محدودشده (NAT سخت‌گیرانه،
+# فایروال دانشگاهی دیگر) هستند نتوانستند به صدا وصل شوند، این بخش را
+# از کامنت خارج و تکمیل کنید. راه‌اندازی TURNS (روی TLS) به گواهی SSL
+# جداگانه برای همین دامنه نیاز دارد؛ ساده‌ترین مسیر استفاده از همان
+# گواهی nginx (استقرار در حالت external_tls) طبق مستندات LiveKit است:
+# https://docs.livekit.io/home/self-hosting/ports-firewall/#turn
+#
+# turn:
+#   enabled: true
+#   domain: voice.testrium.ir
+#   external_tls: true
+#   tls_port: 5349
+#   udp_port: 3478
