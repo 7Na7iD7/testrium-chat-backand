@@ -39,6 +39,7 @@ FILES=(
   "0020_exam_per_question_timing_flag.sql"
   "0021_sync_claims_webhook.sql"
   "0022_admin_audit_log.sql"
+  "0023_submit_exam_session_atomic.sql"
 )
 
 for f in "${FILES[@]}"; do
