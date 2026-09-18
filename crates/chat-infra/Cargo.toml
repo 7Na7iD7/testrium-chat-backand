@@ -18,3 +18,4 @@ sqlx.workspace = true
 jsonwebtoken.workspace = true
 reqwest.workspace = true
 dashmap.workspace = true
+metrics = "0.23"

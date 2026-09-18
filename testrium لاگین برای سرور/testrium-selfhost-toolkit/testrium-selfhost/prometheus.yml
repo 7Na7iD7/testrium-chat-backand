@@ -1,0 +1,36 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
+rule_files:
+  - 'alerts.yml'
+
+scrape_configs:
+  - job_name: 'chat-server'
+    static_configs:
+      - targets: ['chat-server:9090']
+
+  - job_name: 'chat-postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  - job_name: 'livekit'
+    static_configs:
+      - targets: ['host.docker.internal:6789']
+
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'supabase-postgres'
+    static_configs:
+      - targets: ['<IP-سرور-۱>:9187']

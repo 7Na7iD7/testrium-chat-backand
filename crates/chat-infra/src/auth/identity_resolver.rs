@@ -14,9 +14,6 @@ struct CacheEntry {
     cached_at: Instant,
 }
 
-/// اطلاعاتی که از این پس `verify-code` مستقیماً در `app_metadata`
-/// (و در نتیجه در JWT) کاربر می‌نویسد. این نوع کاملاً داخلی همین
-/// ماژول است — فقط `resolve_for_claims` آن را می‌سازد و مصرف می‌کند.
 #[derive(Debug, Clone, Deserialize)]
 struct AppMetadataClaims {
     role: String,
@@ -27,20 +24,6 @@ struct AppMetadataClaims {
     accessible_section_ids: Vec<String>,
 }
 
-/// نقش/کد واقعی کاربر (student_code یا professor_id + section هایی که
-/// بهشان دسترسی دارد) در جداول students/professors/sections/enrollments
-/// روی Supabase است، نه در JWT. این resolver با یک Edge Function سبک
-/// (`chat-identity`، جدا از `verify-code`) که با service_role اجرا
-/// می‌شود، auth_user_id را resolve می‌کند و نتیجه را با TTL کوتاه کش
-/// می‌کند تا هر پیام یک HTTP round-trip اضافه به Supabase نزند.
-///
-/// به‌روزرسانی: از این پس `verify-code`/`sync-user-claims` این اطلاعات
-/// را مستقیماً در `app_metadata` (و در نتیجه در JWT هر کاربر) می‌نویسند.
-/// `resolve_for_claims` این حالت را همیشه اول امتحان می‌کند — بدون هیچ
-/// HTTP call یا کش، چون خودِ JWT (کوتاه‌عمر و هر بار تازه) نقش کش را
-/// بازی می‌کند. فقط اگر توکن این claim ها را نداشت (کاربری با session
-/// قدیمی، پیش‌ از این تغییر)، به مسیر قدیمی (`resolve` + چت-آیدنتیتی)
-/// برمی‌گردد.
 pub struct IdentityResolver {
     http: reqwest::Client,
     supabase_url: String,
@@ -68,19 +51,19 @@ impl IdentityResolver {
         }
     }
 
-    /// نقطه‌ی ورود پیشنهادی برای هر دو مسیر REST و WebSocket: هم مسیر
-    /// تازه‌ی بدون-تأخیر (JWT claims) و هم fallback قدیمی را خودش
-    /// امتحان می‌کند — کافیست extractor.rs/ws/handler.rs فقط این یکی
-    /// را صدا بزنند، به‌جای این‌که هرکدام جدا claim ها را parse کنند.
     pub async fn resolve_for_claims(&self, claims: &SupabaseClaims) -> Result<Identity> {
         if let Ok(app_claims) =
             serde_json::from_value::<AppMetadataClaims>(claims.app_metadata.clone())
         {
             if !app_claims.role.is_empty() && !app_claims.user_code.is_empty() {
+                metrics::counter!("testrium_identity_resolve_path_total", "path" => "claims")
+                    .increment(1);
                 return self.build_identity_from_claims(&claims.sub, &app_claims);
             }
         }
 
+        metrics::counter!("testrium_identity_resolve_path_total", "path" => "fallback")
+            .increment(1);
         self.resolve(&claims.sub).await
     }
 
@@ -104,9 +87,6 @@ impl IdentityResolver {
         })
     }
 
-    /// مسیر fallback (قدیمی): وقتی JWT هنوز claim های بالا را ندارد
-    /// (کاربری که از قبل session باز داشته و هنوز رفرش نشده). همان
-    /// رفتار قبلی — صدا زدن `chat-identity` با کش کوتاه‌مدت.
     pub async fn resolve(&self, auth_user_id: &str) -> Result<Identity> {
         if let Some(entry) = self.cache.get(auth_user_id) {
             if entry.cached_at.elapsed() < CACHE_TTL {
@@ -127,23 +107,10 @@ impl IdentityResolver {
         Ok(identity)
     }
 
-    /// وقتی نقش/دسترسی کاربر تغییر می‌کند (مثلاً استاد section جدیدی
-    /// می‌گیرد)، برای جلوگیری از تا ۵ دقیقه داده‌ی بات، این تابع کش را
-    /// برای یک کاربر خاص باطل می‌کند. فقط مسیر fallback (`resolve`) از
-    /// این کش استفاده می‌کند؛ مسیر اصلی (`resolve_for_claims` وقتی
-    /// claim دارد) اصلاً کش ندارد که باطل شود.
     pub fn invalidate(&self, auth_user_id: &str) {
         self.cache.remove(auth_user_id);
     }
 
-    /// قبل از ساخت اولین ترد بین یک استاد و دانشجو، باید تایید شود که
-    /// این دو واقعاً حداقل یک section مشترک دارند (دانشجو در section ی
-    /// از استاد enrolled است) — این چک نمی‌تواند فقط سمت کلاینت باشد
-    /// چون کلاینت (مخصوصاً استاد) می‌تواند هر student_code دلخواهی در
-    /// SendMessage بفرستد. جدا از `chat-identity` نگه داشته شده چون آن
-    /// تابع فقط «خودِ» کاربر متصل را resolve می‌کند، نه یک جفت
-    /// دلخواه — عمداً یک Edge Function جدا (`chat-verify-link`) با
-    /// امضای متفاوت.
     pub async fn verify_professor_student_link(
         &self,
         professor_id: &str,
@@ -217,4 +184,3 @@ impl IdentityResolver {
         })
     }
 }
-

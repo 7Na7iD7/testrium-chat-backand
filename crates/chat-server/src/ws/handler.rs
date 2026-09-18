@@ -94,6 +94,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, identity: chat_domain
     state.connections.leave_channels(&key, &channel_ids);
 
     if let Some((_, room_id)) = state.active_voice_participants.remove(&key) {
+        metrics::gauge!("testrium_voice_active_rooms").decrement(1.0);
         let _ = state
             .voice_rooms
             .end_open_sessions(room_id, &identity.identifier)
@@ -518,6 +519,9 @@ async fn handle_send_voice_room_message(
         }
     };
 
+    metrics::counter!("testrium_ws_messages_total", "event_type" => "voice_room_message")
+        .increment(1);
+
     let dto: VoiceRoomMessageDto = message.into();
 
     state.connections.push(
@@ -631,6 +635,9 @@ async fn handle_send_message(
         .touch_last_message(thread.thread_id, &message.body, identity.role)
         .await;
 
+    metrics::counter!("testrium_ws_messages_total", "event_type" => "thread_message")
+        .increment(1);
+
     let dto: MessageDto = message.clone().into();
 
     state.connections.push(
@@ -738,6 +745,9 @@ async fn handle_send_channel_message(
             return;
         }
     };
+
+    metrics::counter!("testrium_ws_messages_total", "event_type" => "channel_message")
+        .increment(1);
 
     let dto: ChannelMessageDto = message.into();
 

@@ -7,6 +7,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use axum::routing::get;
 use axum::Router;
+use axum_prometheus::PrometheusMetricLayer;
 use chat_infra::auth::{IdentityResolver, JwtVerifier, LiveKitTokenIssuer};
 use chat_infra::livekit::LiveKitRoomService;
 use chat_infra::repository::{ChannelRepository, MessageRepository, ThreadRepository, VoiceRepository};
@@ -80,12 +81,16 @@ async fn main() -> Result<()> {
         .allow_methods(Any)
         .allow_headers(Any);
 
+    let (prometheus_layer, metric_handle) = PrometheusMetricLayer::pair();
+
     let app = Router::new()
         .route("/ws", get(ws_upgrade_handler))
         .merge(rest::router())
         .layer(cors)
+        .layer(prometheus_layer)
         .layer(TraceLayer::new_for_http())
-        .with_state(state);
+        .with_state(state)
+        .route("/metrics", get(move || async move { metric_handle.render() }));
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", config.port)).await?;
     tracing::info!("listening on {}", listener.local_addr()?);

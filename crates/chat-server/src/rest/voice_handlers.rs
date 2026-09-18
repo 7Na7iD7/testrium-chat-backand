@@ -129,9 +129,13 @@ async fn join_voice_room(
         tracing::warn!(error = %e, "voice_session_log_failed");
     }
 
-    state
+    let was_already_in_room = state
         .active_voice_participants
-        .insert((identity.role, identity.identifier.clone()), room.room_id);
+        .insert((identity.role, identity.identifier.clone()), room.room_id)
+        .is_some();
+    if !was_already_in_room {
+        metrics::gauge!("testrium_voice_active_rooms").increment(1.0);
+    }
 
     Json(VoiceTokenResponse {
         livekit_url: state.config.livekit_url.clone(),
@@ -221,9 +225,13 @@ async fn leave_room(
         .end_speaking_event(room_id, &identity.identifier)
         .await;
 
-    state
+    if state
         .active_voice_participants
-        .remove(&(identity.role, identity.identifier.clone()));
+        .remove(&(identity.role, identity.identifier.clone()))
+        .is_some()
+    {
+        metrics::gauge!("testrium_voice_active_rooms").decrement(1.0);
+    }
 
     broadcast_raise_hand_queue(&state, &room).await;
 

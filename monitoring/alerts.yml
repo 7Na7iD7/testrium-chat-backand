@@ -1,0 +1,50 @@
+groups:
+  - name: testrium-chat
+    rules:
+      - alert: ChatServerDown
+        expr: up{job="chat-server"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "سرور چت پایین است"
+
+      - alert: HighErrorRate5xx
+        expr: |
+          sum(rate(axum_http_requests_total{status=~"5.."}[5m]))
+          /
+          sum(rate(axum_http_requests_total[5m]))
+          > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "نرخ خطای ۵xx بالای ۵٪ است"
+
+      - alert: PostgresConnectionsNearLimit
+        expr: |
+          sum(pg_stat_activity_count) / pg_settings_max_connections > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "اتصالات Postgres به سقف نزدیک شده است"
+
+      - alert: RateLimiterFrequentlyTriggered
+        expr: sum(rate(testrium_rate_limit_rejections_total[5m])) * 300 > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "بیش از ۵۰ رد rate limiter در ۵ دقیقه"
+
+      - alert: DiskSpaceLow
+        expr: |
+          node_filesystem_avail_bytes{mountpoint="/"}
+          / node_filesystem_size_bytes{mountpoint="/"}
+          < 0.15
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "کمتر از ۱۵٪ فضای دیسک باقی مانده است"

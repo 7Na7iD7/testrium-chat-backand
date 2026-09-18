@@ -26,3 +26,5 @@ tower-http.workspace = true
 futures.workspace = true
 dashmap.workspace = true
 dotenvy = "0.15"
+axum-prometheus = "0.7"
+metrics = "0.23"

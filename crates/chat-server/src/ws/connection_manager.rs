@@ -67,6 +67,7 @@ impl ConnectionManager {
     pub fn register(&self, key: ConnectionKey) -> mpsc::UnboundedReceiver<ServerEvent> {
         let (tx, rx) = mpsc::unbounded_channel();
         self.connections.entry(key).or_default().push(tx);
+        metrics::gauge!("testrium_ws_active_connections").increment(1.0);
         rx
     }
 
@@ -80,6 +81,7 @@ impl ConnectionManager {
         }
         self.rate_buckets.remove(&(RateLimitKind::General, key.clone()));
         self.rate_buckets.remove(&(RateLimitKind::VoiceControl, key.clone()));
+        metrics::gauge!("testrium_ws_active_connections").decrement(1.0);
     }
 
     pub fn is_online(&self, key: &ConnectionKey) -> bool {
@@ -142,20 +144,28 @@ impl ConnectionManager {
     }
 
     pub fn check_general_rate_limit(&self, key: &ConnectionKey) -> bool {
-        self.check_rate_limit(
+        let allowed = self.check_rate_limit(
             RateLimitKind::General,
             key,
             GENERAL_RATE_CAPACITY,
             GENERAL_RATE_REFILL_PER_SEC,
-        )
+        );
+        if !allowed {
+            metrics::counter!("testrium_rate_limit_rejections_total", "kind" => "general").increment(1);
+        }
+        allowed
     }
 
     pub fn check_voice_control_rate_limit(&self, key: &ConnectionKey) -> bool {
-        self.check_rate_limit(
+        let allowed = self.check_rate_limit(
             RateLimitKind::VoiceControl,
             key,
             VOICE_CONTROL_RATE_CAPACITY,
             VOICE_CONTROL_RATE_REFILL_PER_SEC,
-        )
+        );
+        if !allowed {
+            metrics::counter!("testrium_rate_limit_rejections_total", "kind" => "voice_control").increment(1);
+        }
+        allowed
     }
 }
