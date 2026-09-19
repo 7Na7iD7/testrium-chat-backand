@@ -40,6 +40,8 @@ FILES=(
   "0021_sync_claims_webhook.sql"
   "0022_admin_audit_log.sql"
   "0023_submit_exam_session_atomic.sql"
+  "0024_code_security_hardening.sql"
+  "0025_fix_verify_code_attempts_rls.sql"
 )
 
 for f in "${FILES[@]}"; do
@@ -72,3 +74,17 @@ echo "    نکته‌ی دیگه: pg_net باید توی ایمیج Postgres sel
 echo "    ایمیج رسمی supabase/postgres این extension رو از قبل داره، پس اگه از"
 echo "    docker-compose رسمی استفاده کرده باشی معمولاً مشکلی پیش نمیاد؛ اگه"
 echo "    'create extension pg_net' با خطا مواجه شد یعنی ایمیج سفارشی/قدیمیه."
+
+echo ""
+echo "⚠️  migration 0024 یه extension اختیاری دیگه هم داره: pg_cron"
+echo "    (برای پاک‌سازی خودکار ساعتی جدول verify_code_attempts). خودِ"
+echo "    migration این رو با یه if exists چک می‌کنه، پس اگه pg_cron روی"
+echo "    ایمیجت نصب نباشه، migration خطا نمی‌ده و فقط این پاک‌سازی خودکار"
+echo "    غیرفعال می‌مونه — جدول verify_code_attempts کم‌کم رشد می‌کنه ولی"
+echo "    هیچ‌چیز دیگه‌ای نمی‌شکنه. اگه می‌خوای فعالش کنی، باید توی"
+echo "    docker-compose.yml سرویس db، shared_preload_libraries رو"
+echo "    شامل pg_cron کنی (ایمیج رسمی supabase/postgres این extension"
+echo "    رو داره، فقط باید توی postgresql.conf فعال بشه) — یا اگه نه،"
+echo "    یه cron خارجی روی خودِ سرور (crontab -e) بذار که همین کوئری"
+echo "    رو هر ساعت بزنه:"
+echo "    delete from verify_code_attempts where attempted_at < now() - interval '24 hours';"
