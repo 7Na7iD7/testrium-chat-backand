@@ -74,7 +74,29 @@ docker compose logs -f chat-infra
 
 ---
 
-## ۳) تست end-to-end بعد از هر دو تغییر
+## ۲.۵) Bootstrap اولین ادمین (migration 0026)
+
+از migration 0026 به بعد، پنل ادمین دیگه رمز مشترک نداره — هر ادمین رمز جداگانه‌ی خودشو داره که فقط هش SHA-256اش توی جدول `admins` ذخیره می‌شه (نه خودِ رمز). یعنی بعد از اجرای migration ها، جدول `admins` خالیه و **هیچ‌کس نمی‌تونه وارد پنل بشه** تا اولین ادمین دستی ساخته بشه.
+
+یک‌بار (فقط همین یک‌بار، بعدش از خودِ پنل با اکشن `create_admin` بقیه رو اضافه کن) این کوئری رو مستقیم روی دیتابیس instance self-hosted اجرا کن:
+
+```sql
+with gen as (
+  select encode(gen_random_bytes(32), 'hex') as plain_secret
+),
+ins as (
+  insert into admins (full_name, secret_hash, is_active)
+  select 'ادمین اصلی', encode(digest(plain_secret, 'sha256'), 'hex'), true
+  from gen
+  returning id
+)
+select gen.plain_secret, ins.id as admin_id
+from gen, ins;
+```
+
+⚠️ ستون `plain_secret` توی خروجی همون رمزیه که باید توی پنل فلاتر (فیلد ورود ادمین) وارد کنی — **همین الان کپیش کن**، چون دیگه هیچ‌وقت به‌صورت خوانا نمایش داده نمی‌شه (فقط هشش توی دیتابیسه). اگه گمش کردی، باید یه ادمین جدید بسازی (با همین کوئری، یا بعداً از پنل با یه ادمین دیگه).
+
+---
 
 با یک اکانت تستی (نه واقعی):
 
@@ -94,3 +116,4 @@ docker compose logs -f chat-infra
 - [ ] لاگین دانشجو/استاد تست شده
 - [ ] submit آزمون تست شده
 - [ ] پیام چت زنده تست شده
+- [ ] اولین ادمین bootstrap شده (بخش ۲.۵) و ورود به پنل ادمین تست شده

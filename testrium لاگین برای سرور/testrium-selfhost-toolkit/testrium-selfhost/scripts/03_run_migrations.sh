@@ -42,6 +42,8 @@ FILES=(
   "0023_submit_exam_session_atomic.sql"
   "0024_code_security_hardening.sql"
   "0025_fix_verify_code_attempts_rls.sql"
+  "0026_admin_identity_system.sql"
+  "0027_admin_roles.sql"
 )
 
 for f in "${FILES[@]}"; do

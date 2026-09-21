@@ -22,8 +22,11 @@ bash scripts/02_start_services.sh
 #    nginx/testrium-supabase.conf رو با دامین واقعی ویرایش و فعال کن
 
 # ۶. اجرای migration ها (اول migrations/*.sql رو در پوشه‌ی migrations بذار)
-# ⚠️ همچنین 0025_fix_verify_code_attempts_rls.sql از پوشه‌ی
-# extra-migrations/ این پکیج رو هم به پوشه‌ی migrations پروژه‌ات کپی کن
+# ⚠️ همچنین این دو فایل رو از پوشه‌ی extra-migrations/ این پکیج به
+# پوشه‌ی migrations پروژه‌ات کپی کن (چون فقط روی پروژه‌ی زنده اجرا
+# شده بودن و در فایل‌های محلی پروژه پیدا/ارسال نشده بودن):
+#   0025_fix_verify_code_attempts_rls.sql (رفع باگ امنیتی RLS)
+#   0027_admin_roles.sql (ستون role برای جدول admins)
 # (این یه باگ امنیتی واقعی بود که روی نسخه‌ی ابری هم پیدا و اصلاح شد —
 # migration 0024 یادش رفته بود RLS رو روی verify_code_attempts فعال کنه)
 bash scripts/03_run_migrations.sh
@@ -53,6 +56,9 @@ scripts/03_run_migrations.sh -> اجرای دقیق ۱۸ migration به ترتی
 scripts/04_migrate_data.sh  -> export/import دیتای جدول‌ها از ابری
 scripts/05_migrate_storage.sh -> sync فایل‌های Storage با rclone
 docs/full-guide.md          -> راهنمای کامل با توضیح هر تصمیم
+monitoring/                 -> مانیتورینگ سرور ۱ (Postgres exporter) از سرور ۲
+                                (پیوند بده به Prometheus موجود روی سرور ۲؛
+                                جزئیات کامل در monitoring/SERVER1_MONITORING_GUIDE.md)
 ```
 
 ## چیزهایی که هنوز از تو لازم دارم (برای اتصال فرانت/بک‌اند)
