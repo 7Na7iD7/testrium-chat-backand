@@ -19,3 +19,4 @@ jsonwebtoken.workspace = true
 reqwest.workspace = true
 dashmap.workspace = true
 metrics = "0.23"
+aws-sdk-s3 = "1.51"
