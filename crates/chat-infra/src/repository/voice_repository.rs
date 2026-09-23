@@ -423,6 +423,30 @@ impl VoiceRepository {
         Ok(rows.into_iter().map(Into::into).collect())
     }
 
+    pub async fn find_recording(&self, recording_id: Uuid) -> Result<Option<VoiceRecordingEntry>> {
+        let row: Option<VoiceRecordingRow> = sqlx::query_as(
+            r#"
+            select id as recording_id, room_id, section_id, recording_url, started_at, ended_at
+            from voice_recordings
+            where id = $1
+            "#,
+        )
+        .bind(recording_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(Into::into))
+    }
+
+    pub async fn delete_recording(&self, recording_id: Uuid) -> Result<bool> {
+        let result = sqlx::query("delete from voice_recordings where id = $1")
+            .bind(recording_id)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(result.rows_affected() > 0)
+    }
+
     pub async fn attendance_report(
         &self,
         room_id: Uuid,

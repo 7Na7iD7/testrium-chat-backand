@@ -1,6 +1,8 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{anyhow, Result};
+use aws_sdk_s3::config::{BehaviorVersion, Builder as S3ConfigBuilder, Credentials, Region};
+use aws_sdk_s3::Client as S3Client;
 use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 use serde::{Deserialize, Serialize};
 
@@ -19,6 +21,47 @@ pub struct EgressS3Output {
     pub endpoint: String,
     pub access_key: String,
     pub secret_key: String,
+}
+
+impl EgressS3Output {
+    fn s3_client(&self) -> S3Client {
+        let credentials = Credentials::new(
+            self.access_key.clone(),
+            self.secret_key.clone(),
+            None,
+            None,
+            "testrium-egress",
+        );
+
+        let config = S3ConfigBuilder::new()
+            .behavior_version(BehaviorVersion::latest())
+            .region(Region::new(self.region.clone()))
+            .endpoint_url(self.endpoint.clone())
+            .credentials_provider(credentials)
+            .force_path_style(true)
+            .build();
+
+        S3Client::from_conf(config)
+    }
+
+    pub fn object_key_from_location(&self, location: &str) -> String {
+        if let Some(idx) = location.find(&self.bucket) {
+            let after_bucket = &location[idx + self.bucket.len()..];
+            return after_bucket.trim_start_matches('/').to_string();
+        }
+        location.trim_start_matches('/').to_string()
+    }
+
+    pub async fn delete_object(&self, key: &str) -> Result<()> {
+        self.s3_client()
+            .delete_object()
+            .bucket(&self.bucket)
+            .key(key)
+            .send()
+            .await
+            .map_err(|e| anyhow!("حذف فایل از storage ناموفق بود: {e}"))?;
+        Ok(())
+    }
 }
 
 #[derive(Debug, Serialize)]

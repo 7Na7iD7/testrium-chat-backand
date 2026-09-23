@@ -1,6 +1,6 @@
 use axum::extract::{Path, Query, State};
 use axum::response::IntoResponse;
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use chat_domain::{Role, VoiceGrants, VoiceRoomStatus};
 use serde::{Deserialize, Serialize};
@@ -40,6 +40,7 @@ pub fn router() -> Router<AppState> {
             "/voice/sections/:section_id/recordings",
             get(list_section_recordings),
         )
+        .route("/voice/recordings/:recording_id", delete(delete_recording))
         .route("/voice/rooms/:room_id/breakout/start", post(start_breakout))
         .route("/voice/rooms/:room_id/breakout/end", post(end_breakout))
         .route("/voice/rooms/:room_id/breakout", get(list_breakout))
@@ -872,6 +873,57 @@ async fn list_section_recordings(
         Ok(recordings) => Json(recordings).into_response(),
         Err(e) => {
             tracing::error!(error = %e, "voice_recordings_list_failed");
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
+async fn delete_recording(
+    State(state): State<AppState>,
+    AuthenticatedUser(identity): AuthenticatedUser,
+    Path(recording_id): Path<Uuid>,
+) -> impl IntoResponse {
+    if let Err(code) = require_professor(&identity) {
+        return code.into_response();
+    }
+
+    let recording = match state.voice_rooms.find_recording(recording_id).await {
+        Ok(Some(r)) => r,
+        Ok(None) => return axum::http::StatusCode::NOT_FOUND.into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "voice_recording_find_failed");
+            return axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    let room = match state.voice_rooms.find_by_section(recording.section_id).await {
+        Ok(Some(r)) => r,
+        Ok(None) => return axum::http::StatusCode::FORBIDDEN.into_response(),
+        Err(_) => return axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+
+    if room.professor_id != identity.identifier {
+        return axum::http::StatusCode::FORBIDDEN.into_response();
+    }
+
+    if let Some(url) = &recording.recording_url {
+        let output = state.config.egress_s3_output();
+        let key = output.object_key_from_location(url);
+        if let Err(e) = output.delete_object(&key).await {
+            tracing::error!(error = %e, "voice_recording_object_delete_failed");
+            return (
+                axum::http::StatusCode::BAD_GATEWAY,
+                "حذف فایل از storage ناموفق بود",
+            )
+                .into_response();
+        }
+    }
+
+    match state.voice_rooms.delete_recording(recording_id).await {
+        Ok(true) => axum::http::StatusCode::NO_CONTENT.into_response(),
+        Ok(false) => axum::http::StatusCode::NOT_FOUND.into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "voice_recording_delete_failed");
             axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
         }
     }
