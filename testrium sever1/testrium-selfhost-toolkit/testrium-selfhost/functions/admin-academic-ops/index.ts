@@ -108,7 +108,7 @@ function getClientIp(req: Request): string {
 }
 
 function summarizePayload(payload: Record<string, unknown>): Record<string, unknown> {
-  const allow = ["section_id", "professor_id", "professor_code", "semester_id", "course_id", "offering_id", "is_active", "role", "code", "admin_id", "full_name", "limit", "offset"];
+  const allow = ["section_id", "professor_id", "professor_code", "semester_id", "course_id", "offering_id", "is_active", "role", "code", "admin_id", "full_name", "limit", "offset", "force"];
   const summary: Record<string, unknown> = {};
   for (const key of allow) {
     if (key in payload) summary[key] = payload[key];
@@ -123,6 +123,7 @@ const ACTION_ROLES: Record<string, AdminRole[] | "full"> = {
   create_semester: "full",
   set_semester_active: "full",
   delete_semester: "full",
+  purge_semester_data: "full",
   create_offering: "full",
   create_section: "full",
   update_section: "full",
@@ -264,6 +265,117 @@ serve(async (req) => {
         break;
       }
 
+      case "purge_semester_data": {
+        const { semester_id, force } = payload as { semester_id?: string; force?: boolean };
+        if (!semester_id) {
+          response = json({ ok: false, message: "ترم مشخص نشده" }, 400);
+          auditResult = "failure";
+          break;
+        }
+
+        const semesterRes = await admin
+          .from("semesters")
+          .select("semester_id, title, ends_at, purged_at")
+          .eq("semester_id", semester_id)
+          .maybeSingle();
+        if (semesterRes.error) throw semesterRes.error;
+        if (!semesterRes.data) {
+          response = json({ ok: false, message: "ترمی با این شناسه یافت نشد" }, 404);
+          auditResult = "failure";
+          break;
+        }
+
+        const semester = semesterRes.data as { ends_at: string; purged_at: string | null };
+
+        if (!force && new Date(semester.ends_at).getTime() > Date.now()) {
+          response = json({
+            ok: false,
+            message: "این ترم هنوز تمام نشده (پایان: " + semester.ends_at + ") — اگر مطمئنی، با force پاکسازی زودهنگام را انجام بده",
+          }, 400);
+          auditResult = "failure";
+          break;
+        }
+
+        const { data: offerings, error: offErr } = await admin
+          .from("course_offerings")
+          .select("offering_id")
+          .eq("semester_id", semester_id);
+        if (offErr) throw offErr;
+        const offeringIds = (offerings ?? []).map((o: any) => o.offering_id as string);
+
+        let sectionIds: string[] = [];
+        if (offeringIds.length > 0) {
+          const { data: sectionsRows, error: secErr } = await admin
+            .from("sections")
+            .select("section_id")
+            .in("offering_id", offeringIds);
+          if (secErr) throw secErr;
+          sectionIds = (sectionsRows ?? []).map((s: any) => s.section_id as string);
+        }
+
+        if (sectionIds.length === 0) {
+          await admin.from("semesters").update({ purged_at: new Date().toISOString() }).eq("semester_id", semester_id);
+          log("info", "action_success", { action, semester_id, section_count: 0, duration_ms: Date.now() - startedAt });
+          response = json({ ok: true, sections_processed: 0, recordings_deleted: 0, messages_deleted: 0, storage_errors: [] });
+          break;
+        }
+
+        const chatServerBaseUrl = Deno.env.get("CHAT_SERVER_BASE_URL");
+        const chatServerSecret = Deno.env.get("CHAT_SERVER_NOTIFY_SECRET");
+        if (!chatServerBaseUrl || !chatServerSecret) {
+          log("error", "chat_server_env_missing", { action });
+          response = json({ ok: false, message: "تنظیمات اتصال به chat-server کامل نیست (CHAT_SERVER_BASE_URL / CHAT_SERVER_NOTIFY_SECRET)" }, 500);
+          auditResult = "failure";
+          break;
+        }
+
+        let purgeRes: Response;
+        try {
+          purgeRes = await fetch(chatServerBaseUrl + "/internal/purge-section-data", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + chatServerSecret,
+            },
+            body: JSON.stringify({ section_ids: sectionIds }),
+          });
+        } catch (fetchErr) {
+          log("error", "chat_server_unreachable", { action, semester_id, error: String(fetchErr) });
+          response = json({ ok: false, message: "ارتباط با chat-server برقرار نشد: " + fetchErr }, 502);
+          auditResult = "failure";
+          break;
+        }
+
+        if (!purgeRes.ok) {
+          const errText = await purgeRes.text().catch(() => "");
+          log("error", "chat_server_purge_failed", { action, semester_id, status: purgeRes.status, body: errText });
+          response = json({ ok: false, message: "پاکسازی چت/صدا ناموفق بود (" + purgeRes.status + "): " + errText }, 502);
+          auditResult = "failure";
+          break;
+        }
+
+        const purgeBody = await purgeRes.json();
+
+        await admin.from("semesters").update({ purged_at: new Date().toISOString() }).eq("semester_id", semester_id);
+
+        log("info", "action_success", {
+          action,
+          semester_id,
+          section_count: sectionIds.length,
+          recordings_deleted: purgeBody.recordings_deleted ?? 0,
+          messages_deleted: purgeBody.messages_deleted ?? 0,
+          duration_ms: Date.now() - startedAt,
+        });
+        response = json({
+          ok: true,
+          sections_processed: sectionIds.length,
+          recordings_deleted: purgeBody.recordings_deleted ?? 0,
+          messages_deleted: purgeBody.messages_deleted ?? 0,
+          storage_errors: purgeBody.storage_errors ?? [],
+        });
+        break;
+      }
+
       case "create_offering": {
         const { course_title, course_code, credit_units, semester_id } = payload as {
           course_title: string; course_code?: string; credit_units?: number; semester_id: string;
@@ -341,15 +453,7 @@ serve(async (req) => {
       case "list_sections": {
         const { data, error } = await admin
           .from("sections")
-          .select(`
-            section_id, section_label, capacity, created_at,
-            professors ( id, professor_code, full_name ),
-            course_offerings (
-              offering_id,
-              course_catalog ( course_title, course_code ),
-              semesters ( title, is_active )
-            )
-          `)
+          .select("section_id, section_label, capacity, created_at, professors ( id, professor_code, full_name ), course_offerings ( offering_id, course_catalog ( course_title, course_code ), semesters ( title, is_active ) )")
           .order("created_at", { ascending: false });
         if (error) throw error;
 
@@ -530,7 +634,7 @@ serve(async (req) => {
           })
           .map((r) => {
             const existing = existingByCode.get(r.student_code)!;
-            return `کد ${r.student_code}: قبلاً برای «${existing.first_name} ${existing.last_name}» ثبت شده، الان داری «${r.first_name} ${r.last_name}» می‌فرستی`;
+            return "کد " + r.student_code + ": قبلاً برای «" + existing.first_name + " " + existing.last_name + "» ثبت شده، الان داری «" + r.first_name + " " + r.last_name + "» می‌فرستی";
           });
 
         if (conflicts.length > 0) {
@@ -538,7 +642,7 @@ serve(async (req) => {
           response = json({
             ok: false,
             error_code: "student_code_conflict",
-            message: `تداخل کد دانشجویی — این کدها قبلاً برای فرد دیگری ثبت شده‌اند:\n${conflicts.join("\n")}\nاگه همون فرده، اول ویرایش کن؛ اگه فرد جدیده، کد دیگه‌ای استفاده کن.`,
+            message: "تداخل کد دانشجویی — این کدها قبلاً برای فرد دیگری ثبت شده‌اند:\n" + conflicts.join("\n") + "\nاگه همون فرده، اول ویرایش کن؛ اگه فرد جدیده، کد دیگه‌ای استفاده کن.",
           }, 409);
           auditResult = "failure";
           break;
@@ -835,7 +939,7 @@ serve(async (req) => {
 
       default:
         log("warn", "unknown_action", { action });
-        response = json({ ok: false, message: `عملیات نامعتبر: ${action}` }, 400);
+        response = json({ ok: false, message: "عملیات نامعتبر: " + action }, 400);
         auditResult = "failure";
     }
   } catch (e) {
@@ -844,7 +948,7 @@ serve(async (req) => {
       error_message: String(e),
       duration_ms: Date.now() - startedAt,
     });
-    response = json({ ok: false, message: `خطا: ${e}` }, 500);
+    response = json({ ok: false, message: "خطا: " + e }, 500);
     auditResult = "failure";
     auditError = String(e);
   }

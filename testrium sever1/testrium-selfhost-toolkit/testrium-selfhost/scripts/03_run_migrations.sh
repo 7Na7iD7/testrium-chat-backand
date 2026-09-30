@@ -51,6 +51,8 @@ FILES=(
   "0025_fix_verify_code_attempts_rls.sql"
   "0026_admin_identity_system.sql"
   "0027_admin_roles.sql"
+  "0028_add_purged_at_to_semesters.sql"
+  "0029_create_passkey_tables.sql"
 )
 
 # قبل از شروع مطمئن شو همه‌ی فایل‌ها هستن (تا وسط کار متوقف نشه)
@@ -83,3 +85,11 @@ echo ""
 echo "⚠️  migration 0024 از pg_cron اختیاری استفاده می‌کنه. اگه فعال نبود، این کوئری"
 echo "    رو با cron خارجی (crontab -e) هر ساعت اجرا کن:"
 echo "    docker exec -i $DB_CONTAINER psql -U postgres -d postgres -c \"delete from verify_code_attempts where attempted_at < now() - interval '24 hours';\""
+echo ""
+echo "⚠️  migration 0028 پیش‌نیاز اکشن جدید purge_semester_data در admin-academic-ops هست."
+echo "    برای این‌که اون اکشن کار کنه، این دو env var هم باید در .env تابع"
+echo "    admin-academic-ops ست بشن (توجه: CHAT_SERVER_BASE_URL با CHAT_SERVER_URL"
+echo "    که برای sync-user-claims استفاده کردیم فرق داره، اسم متغیر جداست):"
+echo "        CHAT_SERVER_BASE_URL=https://<دامنه چت>"
+echo "        CHAT_SERVER_NOTIFY_SECRET=<همون مقدار قبلی>"
+echo "    و سمت Rust باید endpoint POST /internal/purge-section-data پیاده‌سازی شده باشه."
