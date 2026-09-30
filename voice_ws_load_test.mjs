@@ -12,7 +12,7 @@ const tokens = (process.env.LOAD_TEST_TOKENS || '')
   .filter(Boolean);
 
 if (tokens.length === 0) {
-  console.error('LOAD_TEST_TOKENS خالی است. یک لیست توکن معتبر با کاما جدا شده بده.');
+  console.error('LOAD_TEST_TOKENS');
   process.exit(1);
 }
 

@@ -136,13 +136,6 @@ pub enum ServerEvent {
         recording_url: Option<String>,
         raise_hand_queue: Vec<VoiceRaiseHandEntryDto>,
     },
-    /// وقتی دسترسی کاربر (نقش/کد/لیست section ها) در Supabase تغییر
-    /// می‌کند (مثلاً استاد او را در یک section جدید ثبت‌نام می‌کند)،
-    /// `sync-user-claims` بعد از آپدیت `app_metadata`، از طریق مسیر
-    /// داخلی `/internal/notify-claims-updated` به این سرور خبر می‌دهد؛
-    /// اگر همان لحظه کاربر آنلاین باشد، این رویداد برایش فرستاده
-    /// می‌شود تا کلاینت بدون معطلی تا چرخه‌ی خودکار بعدی،
-    /// `refreshSession` را صدا بزند و JWT تازه با claim های جدید بگیرد.
     ClaimsUpdated,
     Error {
         message: String,

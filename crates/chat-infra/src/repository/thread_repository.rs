@@ -12,19 +12,6 @@ impl ThreadRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
-
-    /// ترد بین یک استاد و دانشجوی مشخص را برمی‌گرداند؛ اگر وجود نداشت
-    /// می‌سازد. یکتایی (professor_id, student_code) در سطح دیتابیس
-    /// تضمین می‌شود، پس این عملیات با ON CONFLICT ایمن در برابر race
-    /// (دو پیام هم‌زمان که هر دو سعی می‌کنند ترد را بسازند) است.
-    ///
-    /// نکته: عمداً `sqlx::query_as!` (نسخه‌ی چک‌شونده در زمان کامپایل)
-    /// استفاده نشده، چون آن ماکرو برای بیلد نیاز به یک دیتابیس زنده و
-    /// migrate‌شده در همان لحظه‌ی `cargo build` دارد. نسخه‌ی runtime
-    /// (`query_as` + `FromRow`) اجازه می‌دهد CI/بیلد بدون دیتابیس هم
-    /// موفق شود؛ خطای تایپ فقط در تست/اجرا دیده می‌شود نه در کامپایل —
-    /// اگر بعداً `sqlx-cli` و offline cache (`cargo sqlx prepare`) به
-    /// پروژه اضافه شد می‌توان به query_as! بازگشت.
     pub async fn get_or_create(
         &self,
         professor_id: &str,
@@ -51,15 +38,6 @@ impl ThreadRepository {
         Ok(row.into())
     }
 
-    /// نسخه‌ی امن‌تر `get_or_create`: اگر ترد از قبل بین این دو نفر
-    /// وجود دارد همان را برمی‌گرداند (بدون هیچ round-trip اضافه به
-    /// Supabase — یعنی این چک فقط یک‌بار، برای اولین پیامِ یک گفتگو،
-    /// هزینه دارد). اگر وجود نداشت، ابتدا از طریق
-    /// `IdentityResolver::verify_professor_student_link` از Supabase
-    /// تایید می‌گیرد که این دانشجو واقعاً در section ای از این استاد
-    /// enrolled است؛ در غیر این صورت `Ok(None)` برمی‌گرداند (نه Err،
-    /// چون این یک خطای سیستمی نیست بلکه رد قانونی درخواست است) و لایه‌ی
-    /// بالاتر (handler) پیام خطای مناسب را به کلاینت برمی‌گرداند.
     pub async fn get_or_create_if_linked(
         &self,
         professor_id: &str,
@@ -110,8 +88,6 @@ impl ThreadRepository {
         Ok(row.map(Into::into))
     }
 
-    /// همه‌ی تردهای یک استاد، مرتب‌شده بر اساس آخرین پیام (برای صفحه‌ی
-    /// لیست گفتگوهای پنل استاد).
     pub async fn list_for_professor(&self, professor_id: &str) -> Result<Vec<Thread>> {
         let rows: Vec<ThreadRow> = sqlx::query_as(
             r#"
@@ -130,8 +106,6 @@ impl ThreadRepository {
         Ok(rows.into_iter().map(Into::into).collect())
     }
 
-    /// همه‌ی تردهای یک دانشجو (با هر استادی که به او پیام داده یا او
-    /// به آن استاد پیام داده است).
     pub async fn list_for_student(&self, student_code: &str) -> Result<Vec<Thread>> {
         let rows: Vec<ThreadRow> = sqlx::query_as(
             r#"
@@ -156,8 +130,6 @@ impl ThreadRepository {
         preview: &str,
         sent_by: chat_domain::Role,
     ) -> Result<()> {
-        // بسته به این‌که فرستنده استاد است یا دانشجو، شمارنده‌ی
-        // نخوانده‌ی طرف مقابل افزایش پیدا می‌کند.
         match sent_by {
             chat_domain::Role::Professor => {
                 sqlx::query(
@@ -193,8 +165,6 @@ impl ThreadRepository {
         Ok(())
     }
 
-    /// وقتی طرف مقابل ترد را باز می‌کند، شمارنده‌ی نخوانده‌ی خودش صفر
-    /// می‌شود.
     pub async fn mark_read(&self, thread_id: Uuid, reader_role: chat_domain::Role) -> Result<()> {
         match reader_role {
             chat_domain::Role::Student => {

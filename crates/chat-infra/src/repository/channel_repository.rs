@@ -164,6 +164,26 @@ impl ChannelRepository {
 
         Ok(rows.into_iter().map(Into::into).collect())
     }
+
+    pub async fn purge_channel(&self, channel_id: Uuid) -> Result<i64> {
+        let deleted = sqlx::query("delete from channel_messages where channel_id = $1")
+            .bind(channel_id)
+            .execute(&self.pool)
+            .await?
+            .rows_affected() as i64;
+
+        sqlx::query("delete from channel_reads where channel_id = $1")
+            .bind(channel_id)
+            .execute(&self.pool)
+            .await?;
+
+        sqlx::query("delete from channels where channel_id = $1")
+            .bind(channel_id)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(deleted)
+    }
 }
 
 #[derive(sqlx::FromRow)]

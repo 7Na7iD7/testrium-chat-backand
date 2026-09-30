@@ -8,18 +8,6 @@ use axum_extra::TypedHeader;
 
 use crate::state::AppState;
 
-/// معادل REST همان چیزی که در ws/handler.rs برای WebSocket انجام
-/// می‌شود: از هدر `Authorization: Bearer <token>` توکن را می‌خواند،
-/// تایید می‌کند و هویت را resolve می‌کند.
-///
-/// نکته‌ی فنی: `FromRequestParts` در axum هنوز داخلاً با ماکروی
-/// `#[async_trait]` (کتابخونه‌ی async-trait، نه async-fn خام Rust)
-/// تعریف شده — یعنی امضای واقعی‌ای که کامپایلر انتظار داره یک تابع
-/// معمولی با خروجی `Pin<Box<dyn Future<...>>>` است، نه یک `async fn`
-/// خام. اگر impl را با `async fn` ساده بنویسیم (بدون همون ماکرو روی
-/// خودِ impl)، امضای دو طرف از نظر lifetime یکی نمی‌شود — دقیقاً همون
-/// خطای E0195 که دیدی. راه‌حل: همین `#[async_trait]` را روی impl هم
-/// می‌گذاریم تا هر دو طرف یک شکل expand بشوند.
 pub struct AuthenticatedUser(pub chat_domain::Identity);
 
 #[async_trait]

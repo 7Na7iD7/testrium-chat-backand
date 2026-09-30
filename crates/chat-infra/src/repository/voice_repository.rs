@@ -447,6 +447,51 @@ impl VoiceRepository {
         Ok(result.rows_affected() > 0)
     }
 
+    pub async fn purge_section_recordings(&self, section_id: Uuid) -> Result<Vec<VoiceRecordingEntry>> {
+        let rows: Vec<VoiceRecordingRow> = sqlx::query_as(
+            r#"
+            select id as recording_id, room_id, section_id, recording_url, started_at, ended_at
+            from voice_recordings
+            where section_id = $1
+            "#,
+        )
+        .bind(section_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        sqlx::query("delete from voice_recordings where section_id = $1")
+            .bind(section_id)
+            .execute(&self.pool)
+            .await?;
+
+        sqlx::query(
+            r#"
+            update voice_rooms
+            set recording_egress_id = null, recording_url = null, recording_started_at = null
+            where section_id = $1
+            "#,
+        )
+        .bind(section_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    pub async fn purge_section_room_messages(&self, section_id: Uuid) -> Result<i64> {
+        let result = sqlx::query(
+            r#"
+            delete from voice_room_messages
+            where room_id in (select room_id from voice_rooms where section_id = $1)
+            "#,
+        )
+        .bind(section_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.rows_affected() as i64)
+    }
+
     pub async fn attendance_report(
         &self,
         room_id: Uuid,

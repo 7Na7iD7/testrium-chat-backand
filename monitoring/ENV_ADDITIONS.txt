@@ -1,7 +1,0 @@
-به .env سرور Rust (کنار docker-compose.yml) این خط اضافه بشه:
-
-GRAFANA_ADMIN_PASSWORD=<با: openssl rand -base64 24>
-
-نیازی به متغیر env برای Alertmanager نیست — مقادیر webhook/SMTP مستقیم داخل
-monitoring/alertmanager.yml (جای REPLACE_WITH_*) پر می‌شن، چون Alertmanager
-از .env این پروژه env-substitution نمی‌خونه.

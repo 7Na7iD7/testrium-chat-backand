@@ -1,11 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-
-/// یک گفتگوی مستقیم بین یک استاد و یک دانشجوی مشخص. هر جفت
-/// (professor_id, student_code) دقیقاً یک thread دارد (constraint
-/// یکتایی در migration دیتابیس چت اعمال می‌شود)، صرف‌نظر از این‌که
-/// دانشجو در چند section از همان استاد enrolled باشد.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Thread {
     pub thread_id: Uuid,

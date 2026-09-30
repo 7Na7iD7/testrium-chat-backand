@@ -13,14 +13,3 @@ receivers:
     webhook_configs:
       - url: 'REPLACE_WITH_WEBHOOK_URL'
         send_resolved: true
-
-    # اگر به‌جای Webhook ایمیل می‌خوای: webhook_configs بالا رو کامنت کن
-    # و این بلوک رو با مقادیر واقعی SMTP پر کن:
-    #
-    # email_configs:
-    #   - to: 'REPLACE_WITH_ALERT_EMAIL'
-    #     from: 'REPLACE_WITH_FROM_EMAIL'
-    #     smarthost: 'REPLACE_WITH_SMTP_HOST:587'
-    #     auth_username: 'REPLACE_WITH_SMTP_USER'
-    #     auth_password: 'REPLACE_WITH_SMTP_PASSWORD'
-    #     require_tls: true
